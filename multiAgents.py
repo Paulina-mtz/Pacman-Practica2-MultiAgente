@@ -24,6 +24,7 @@ class ReflexAgent(Agent):
     Un agente reflexivo que elige su acción en cada punto de decisión 
     evaluando heurísticamente los estados sucesores.
     """
+    print("Usando mi evaluación personalizada para ReflexAgent")
 
     def getAction(self, gameState):
         """
