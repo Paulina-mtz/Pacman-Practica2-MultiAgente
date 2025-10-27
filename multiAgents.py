@@ -51,72 +51,70 @@ class ReflexAgent(Agent):
 
     def evaluationFunction(self, currentGameState, action):
         """
-        Evaluación fuerte para ReflexAgent: evita fantasmas activos,
-        persigue fantasmas asustados, prioriza comer y acercarse a comida/cápsulas.
+        Versión mejorada del agente Reflex.
+        Evalúa la seguridad (fantasmas), la eficiencia (comida) y la progresión.
         """
         from util import manhattanDistance
         from game import Directions
     
         successor = currentGameState.generatePacmanSuccessor(action)
         newPos = successor.getPacmanPosition()
-        foodGrid = successor.getFood()
-        foodList = foodGrid.asList()
-        ghosts = successor.getGhostStates()
-        scaredTimes = [g.scaredTimer for g in ghosts]
+        newFood = successor.getFood().asList()
+        newGhostStates = successor.getGhostStates()
+        newScaredTimes = [ghost.scaredTimer for ghost in newGhostStates]
         capsules = successor.getCapsules()
     
-        # Si el sucesor ya es perder/ganar, decide de inmediato
+        # Si ya perdió o ganó
         if successor.isLose():
-            return -1e9
+            return -1e6
         if successor.isWin():
-            return 1e9
+            return 1e6
     
         score = successor.getScore()
     
-        # 1) Evitar STOP
-        if action == Directions.STOP:
-            score -= 100.0
-    
-        # 2) Fantasmas: castigo MUY fuerte si están cerca activos; premio si están asustados
-        minActiveGhostDist = float('inf')
-        ghostTerm = 0.0
-        for g, st in zip(ghosts, scaredTimes):
-            d = manhattanDistance(newPos, g.getPosition())
-            if st > 0:
-                # incentiva cazar fantasmas asustados
+        # --- FANTASMAS ---
+        minGhostDist = float('inf')
+        ghostDanger = 0.0
+        for ghost, scared in zip(newGhostStates, newScaredTimes):
+            d = manhattanDistance(newPos, ghost.getPosition())
+            if scared > 0:
+                # recompensa perseguir fantasmas asustados
                 if d > 0:
-                    ghostTerm += 200.0 / d
+                    score += 200.0 / d
             else:
-                # fantasmas activos: penaliza fuertemente cercanía
-                minActiveGhostDist = min(minActiveGhostDist, d)
-                if d <= 1:
-                    return -1e8  # prácticamente prohibido
-                elif d == 2:
-                    ghostTerm -= 500.0
-                else:
-                    ghostTerm -= 30.0 / d
+                if d < 2:
+                    return -1e6  # evita morir
+                ghostDanger += 15.0 / d
+                minGhostDist = min(minGhostDist, d)
     
-        score += ghostTerm
+        score -= ghostDanger  # penaliza acercarse a fantasmas activos
     
-        # 3) Comida: gran bono al comer; y atractor a la comida más cercana
-        oldFood = currentGameState.getNumFood()
-        newFood = successor.getNumFood()
-        if newFood < oldFood:
-            score += 120.0  # comiste
+        # --- COMIDA ---
+        if newFood:
+            minFoodDist = min(manhattanDistance(newPos, f) for f in newFood)
+            score += 10.0 / (1.0 + minFoodDist)
+        oldFoodCount = currentGameState.getNumFood()
+        newFoodCount = successor.getNumFood()
+        if newFoodCount < oldFoodCount:
+            score += 100.0  # comió algo
     
-        if foodList:
-            minFoodDist = min(manhattanDistance(newPos, f) for f in foodList)
-            # Entre más cerca de comida, mejor
-            score += 15.0 / (1.0 + minFoodDist)
-    
-        # 4) Cápsulas: gran bono al comer; y atractor a la cápsula más cercana
+        # --- CÁPSULAS ---
         if newPos in capsules:
             score += 150.0
         elif capsules:
             minCapDist = min(manhattanDistance(newPos, c) for c in capsules)
-            score += 12.0 / (1.0 + minCapDist)
+            score += 8.0 / (1.0 + minCapDist)
+    
+        # --- MOVIMIENTO ---
+        if action == Directions.STOP:
+            score -= 50.0
+    
+        # --- FACTOR DE SEGURIDAD ---
+        if minGhostDist < 3:
+            score -= 50.0 / (1.0 + minGhostDist)
     
         return score
+
 
 
 def scoreEvaluationFunction(currentGameState):
