@@ -51,61 +51,71 @@ class ReflexAgent(Agent):
 
     def evaluationFunction(self, currentGameState, action):
         """
-        A better evaluation function for ReflexAgent.
-        Returns higher values for better states for Pacman.
+        Evaluación fuerte para ReflexAgent: evita fantasmas activos,
+        persigue fantasmas asustados, prioriza comer y acercarse a comida/cápsulas.
         """
-
         from util import manhattanDistance
         from game import Directions
-
-        # Generate successor and extract info
-        successorGameState = currentGameState.generatePacmanSuccessor(action)
-        newPos = successorGameState.getPacmanPosition()
-        newFoodGrid = successorGameState.getFood()
-        newGhostStates = successorGameState.getGhostStates()
-        newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
-        capsules = successorGameState.getCapsules()
-
-        # Base score
-        score = successorGameState.getScore()
-
-        # Penalize stopping
+    
+        successor = currentGameState.generatePacmanSuccessor(action)
+        newPos = successor.getPacmanPosition()
+        foodGrid = successor.getFood()
+        foodList = foodGrid.asList()
+        ghosts = successor.getGhostStates()
+        scaredTimes = [g.scaredTimer for g in ghosts]
+        capsules = successor.getCapsules()
+    
+        # Si el sucesor ya es perder/ganar, decide de inmediato
+        if successor.isLose():
+            return -1e9
+        if successor.isWin():
+            return 1e9
+    
+        score = successor.getScore()
+    
+        # 1) Evitar STOP
         if action == Directions.STOP:
-            score -= 10.0
-
-        # Reward for eating food
-        oldFoodCount = currentGameState.getNumFood()
-        newFoodCount = successorGameState.getNumFood()
-        if newFoodCount < oldFoodCount:
-            score += 20.0
-
-        # Reward getting closer to food
-        foodList = newFoodGrid.asList()
+            score -= 100.0
+    
+        # 2) Fantasmas: castigo MUY fuerte si están cerca activos; premio si están asustados
+        minActiveGhostDist = float('inf')
+        ghostTerm = 0.0
+        for g, st in zip(ghosts, scaredTimes):
+            d = manhattanDistance(newPos, g.getPosition())
+            if st > 0:
+                # incentiva cazar fantasmas asustados
+                if d > 0:
+                    ghostTerm += 200.0 / d
+            else:
+                # fantasmas activos: penaliza fuertemente cercanía
+                minActiveGhostDist = min(minActiveGhostDist, d)
+                if d <= 1:
+                    return -1e8  # prácticamente prohibido
+                elif d == 2:
+                    ghostTerm -= 500.0
+                else:
+                    ghostTerm -= 30.0 / d
+    
+        score += ghostTerm
+    
+        # 3) Comida: gran bono al comer; y atractor a la comida más cercana
+        oldFood = currentGameState.getNumFood()
+        newFood = successor.getNumFood()
+        if newFood < oldFood:
+            score += 120.0  # comiste
+    
         if foodList:
             minFoodDist = min(manhattanDistance(newPos, f) for f in foodList)
-            score += 5.0 / (1.0 + minFoodDist)
-
-        # Reward eating or approaching capsules
+            # Entre más cerca de comida, mejor
+            score += 15.0 / (1.0 + minFoodDist)
+    
+        # 4) Cápsulas: gran bono al comer; y atractor a la cápsula más cercana
         if newPos in capsules:
-            score += 25.0
+            score += 150.0
         elif capsules:
             minCapDist = min(manhattanDistance(newPos, c) for c in capsules)
-            score += 2.5 / (1.0 + minCapDist)
-
-        # Handle ghosts — avoid close active ghosts, chase scared ones
-        for gState, scared in zip(newGhostStates, newScaredTimes):
-            gpos = gState.getPosition()
-            d = manhattanDistance(newPos, gpos)
-            if d == 0 and scared == 0:
-                score -= 500.0
-            elif scared > 0:
-                score += 30.0 / (1.0 + d)
-            else:
-                if d <= 1:
-                    score -= 300.0
-                else:
-                    score -= 6.0 / (1.0 + d)
-
+            score += 12.0 / (1.0 + minCapDist)
+    
         return score
 
 
