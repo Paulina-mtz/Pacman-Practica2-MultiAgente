@@ -51,12 +51,14 @@ class ReflexAgent(Agent):
 
     def evaluationFunction(self, currentGameState, action):
         """
-        Versión mejorada del agente Reflex.
-        Evalúa la seguridad (fantasmas), la eficiencia (comida) y la progresión.
+        Versión final optimizada del ReflexAgent.
+        Evita muertes, premia acercarse a comida y castiga la inacción.
         """
+    
         from util import manhattanDistance
         from game import Directions
     
+        # Genera estado sucesor
         successor = currentGameState.generatePacmanSuccessor(action)
         newPos = successor.getPacmanPosition()
         newFood = successor.getFood().asList()
@@ -64,30 +66,26 @@ class ReflexAgent(Agent):
         newScaredTimes = [ghost.scaredTimer for ghost in newGhostStates]
         capsules = successor.getCapsules()
     
-        # Si ya perdió o ganó
+        # Si pierde o gana, devuelve extremo
         if successor.isLose():
-            return -1e6
+            return -float('inf')
         if successor.isWin():
-            return 1e6
+            return float('inf')
     
         score = successor.getScore()
     
         # --- FANTASMAS ---
-        minGhostDist = float('inf')
-        ghostDanger = 0.0
+        ghostPenalty = 0
         for ghost, scared in zip(newGhostStates, newScaredTimes):
-            d = manhattanDistance(newPos, ghost.getPosition())
-            if scared > 0:
-                # recompensa perseguir fantasmas asustados
-                if d > 0:
-                    score += 200.0 / d
+            dist = manhattanDistance(newPos, ghost.getPosition())
+            if scared == 0:
+                if dist <= 1:
+                    return -float('inf')  # muerte inmediata
+                ghostPenalty += 5.0 / dist
             else:
-                if d < 2:
-                    return -1e6  # evita morir
-                ghostDanger += 15.0 / d
-                minGhostDist = min(minGhostDist, d)
+                score += 200.0 / (dist + 1)  # perseguir asustados
     
-        score -= ghostDanger  # penaliza acercarse a fantasmas activos
+        score -= ghostPenalty * 15.0  # penaliza cercanía a fantasmas activos
     
         # --- COMIDA ---
         if newFood:
@@ -109,11 +107,13 @@ class ReflexAgent(Agent):
         if action == Directions.STOP:
             score -= 50.0
     
-        # --- FACTOR DE SEGURIDAD ---
-        if minGhostDist < 3:
-            score -= 50.0 / (1.0 + minGhostDist)
+        # --- FACTOR DE PROGRESO ---
+        # castiga estar lejos de toda comida si no hay peligro
+        if newFood:
+            score -= 2.0 * len(newFood)
     
         return score
+
 
 
 
