@@ -44,56 +44,41 @@ class ReflexAgent(Agent):
         return legalMoves[chosenIndex]
 
     def evaluationFunction(self, currentGameState, action):
-        """
-        Evalúa el estado sucesor tras ejecutar `action` desde `currentGameState`.
-        Retorna un valor numérico donde los valores más altos indican estados mejores.
-        """
-        # Obtener estado sucesor y datos relevantes
         successorGameState = currentGameState.generatePacmanSuccessor(action)
-        newPos = successorGameState.getPacmanPosition()      # Posición de Pacman tras la acción
-        newFood = successorGameState.getFood()               # Grid de comida restante
-        newGhostStates = successorGameState.getGhostStates() # Estados de fantasmas tras la acción
-
-        # Si esta acción termina el juego, devolver puntajes extremos
+        newPos = successorGameState.getPacmanPosition()
+        newFood = successorGameState.getFood().asList()
+        newGhostStates = successorGameState.getGhostStates()
+        newScaredTimes = [ghost.scaredTimer for ghost in newGhostStates]
+    
+        # Estado terminal
         if successorGameState.isWin():
-            return float("inf")    # Gana el juego con esta acción
+            return float('inf')
         if successorGameState.isLose():
-            return float("-inf")   # Pierde el juego con esta acción
-
-        # Comenzar el puntaje con el score base del estado sucesor (incluye puntos ganados/perdidos)
+            return -float('inf')
+    
         score = successorGameState.getScore()
-
-        # Distancia Manhattan a la comida más cercana
-        foodDistances = [manhattanDistance(newPos, food) for food in newFood.asList()]
-        if foodDistances:
-            # Añadir inversamente la distancia a la comida (más cerca => mayor contribución)
-            score += 1.0 / min(foodDistances)
-
-        # Considerar distancia a los fantasmas 
-        for ghostState in newGhostStates:
-            ghostPos = ghostState.getPosition()
-            dist = manhattanDistance(newPos, ghostPos)
-            if ghostState.scaredTimer == 0:  # Fantasma activo (no asustado)
-                if dist <= 1:  
-                    # Si el fantasma está muy cerca (distancia 1 o 0), gran penalización 
-                    # (posible muerte si colisiona)
-                    if dist == 0:
-                        return float("-inf")  # Pacman estaría en la misma casilla que un fantasma activo
-                    score -= 2.0  # penalización adicional por estar a distancia 1
-                # Penalizar proximidad a fantasmas activos (mayor distancia => penalización menor)
+    
+        # Comida: buscar la más cercana
+        if newFood:
+            minFoodDist = min(manhattanDistance(newPos, foodPos) for foodPos in newFood)
+            score += 10.0 / minFoodDist
+    
+        # Fantasmas: evitar si no están asustados, acercarse si sí
+        for ghost, scared in zip(newGhostStates, newScaredTimes):
+            dist = manhattanDistance(newPos, ghost.getPosition())
+            if scared == 0:
+                if dist <= 1:
+                    return -float('inf')
                 score -= 2.0 / dist
             else:
-                # Fantasma asustado: incentivar acercarse para comerlo (más cerca => mayor recompensa)
-                if dist > 0:
-                    score += 2.0 / dist
-                # Nota: si dist==0 con fantasma asustado, Pacman lo comerá obteniendo puntos,
-                # lo cual ya se refleja en successorGameState.getScore()
-
-        # Penalizar la acción de quedarse quieto para fomentar movimiento
+                score += 2.0 / dist
+    
+        # Penalizar quedarse quieto
         if action == Directions.STOP:
             score -= 5
-
+    
         return score
+
 
 
 def scoreEvaluationFunction(currentGameState):
